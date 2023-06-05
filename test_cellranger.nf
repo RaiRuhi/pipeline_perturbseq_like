@@ -19,7 +19,7 @@ nextflow.enable.dsl=2
 //params.ADDGENENAMES= '/data/gersbachlab/Ruhi/pipeline_perturbseq_like/test_genename.txt'
 //params.CREATE_REF = false
 //params.DIRECTION  = "both"
-//params.CELLRANGER_OUT  = "gasperini_01/outs/filtered_feature_bc_matrix"
+
 
 
 
@@ -36,17 +36,9 @@ workflow {
    creatingGuideRef( downloadGenome.out.genome, Channel.of(params.KALLISTO_BIN), guide_feature_preprocessed.guide_features, params.CREATE_REF )
     
     
-    cellranger_rna_out = cellrangerRNA (
+    cellranger_out = cellranger (
                  Channel.from(params.FASTQ_NAMES_TRANSCRIPTS),
                  Channel.from(params.FASTQ_FILES_TRANSCRIPTS),
-                 Channel.from(params.GUIDE_FEATURES),
-                 Channel.from(params.CELLRANGER_REF),
-                 Channel.of(params.CHEMISTRY).collect(),
-                 Channel.of(params.THREADS).collect(),
-                 Channel.of(params.WHITELIST).collect(), 
-                )
-                
-     cellranger_guide_out = cellrangerGuide (
                  Channel.from(params.FASTQ_NAMES_GUIDES),
                  Channel.from(params.FASTQ_FILES_GUIDES),
                  Channel.from(params.GUIDE_FEATURES),
@@ -54,11 +46,11 @@ workflow {
                  Channel.of(params.CHEMISTRY).collect(),
                  Channel.of(params.THREADS).collect(),
                  Channel.of(params.WHITELIST).collect(),
-                )                 
+                )
            
     
-     dir_count_files = cellranger_guide_out.ks_guide_out.join(cellranger_rna_out.ks_transcripts_out, remainder: true).flatten().toList().view()
-    //dir_count_files = cellranger_out.mtx_file.flatten().toList().view()
+     //dir_count_files = cellranger_guide_out.ks_guide_out.join(cellranger_rna_out.ks_transcripts_out, remainder: true).flatten().toList().view()
+    dir_count_files = cellranger_out.mtx_file.flatten().toList().view()
     //dir_count_files.view()
     
     df_initialized = preprocessing(dir_count_files)
@@ -208,41 +200,10 @@ process compositionREADSGuides {
         """
 } 
 
-process cellrangerRNA {
+process cellranger {
         input:
         tuple val(rna_sample_name)
         tuple val(rna_string_fastqz)
-        tuple val(guide_features)
-        tuple val(cellranger_ref)
-        tuple val(chemistry)
-        tuple val(threads)
-        tuple val(whitelist)
-        output:
-        path ("${cellranger_out}_ks_transcripts_out"),  emit: ks_transcripts_out
-
-        script:
-    
-        """
-        
-        chmod 700 /data/gersbachlab/Ruhi/pipeline_perturbseq_like/generating_cell_range_inputs.py
-        /data/gersbachlab/Ruhi/pipeline_perturbseq_like/generating_cell_range_inputs_one.py --rna_sample_name $rna_sample_name --rna_string_fastqz "$rna_string_fastqz" --guide_features $guide_features --cellranger_ref $cellranger_ref --chemistry $chemistry --threads 15 --whitelist $whitelist
-        #The script generating_cell_range_inputs.py should create the library.csv and feature_ref.csv 
-        #remove the comment to run cellranger
-        /data/gersbachlab/Ruhi/pipeline_perturbseq_like/cellranger-7.1.0/bin/cellranger count --id=gasperini_01 --libraries=/data/gersbachlab/Ruhi/pipeline_perturbseq_like/library.csv --transcriptome=$cellranger_ref --feature-ref=/data/gersbachlab/Ruhi/pipeline_perturbseq_like/feature_ref.csv 
-        
-        #Artificially creating the output. Remove it when cellranger starts running.
-        
-        mkdir  outs
-        mkdir outs/filtered_feature_bc_matrix/
-        mkdir 'outs/filtered_feature_bc_matrix/matrix.mtx.gz'
-        
-      
-        
-        """
-} 
-
-process cellrangerGuide {
-        input:
         tuple val(guide_sample_name)
         tuple val(guide_string_fastqz)
         tuple val(guide_features)
@@ -251,14 +212,14 @@ process cellrangerGuide {
         tuple val(threads)
         tuple val(whitelist)
         output:
-        path ("${cellranger_out}_ks_guide_out"),  emit: ks_guide_out
+        path ('outs/filtered_feature_bc_matrix'),  emit: mtx_file
 
         script:
     
         """
         
         chmod 700 /data/gersbachlab/Ruhi/pipeline_perturbseq_like/generating_cell_range_inputs.py
-        /data/gersbachlab/Ruhi/pipeline_perturbseq_like/generating_cell_range_inputs_two.py --guide_sample_name $guide_sample_name --guide_string_fastqz "$guide_string_fastqz" --guide_features $guide_features --cellranger_ref $cellranger_ref --chemistry $chemistry --threads 15 --whitelist $whitelist
+        /data/gersbachlab/Ruhi/pipeline_perturbseq_like/generating_cell_range_inputs.py --rna_sample_name $rna_sample_name --rna_string_fastqz "$rna_string_fastqz" --guide_sample_name $guide_sample_name --guide_string_fastqz "$guide_string_fastqz" --guide_features $guide_features --cellranger_ref $cellranger_ref --chemistry $chemistry --threads 15 --whitelist $whitelist
         #The script generating_cell_range_inputs.py should create the library.csv and feature_ref.csv 
         #remove the comment to run cellranger
         /data/gersbachlab/Ruhi/pipeline_perturbseq_like/cellranger-7.1.0/bin/cellranger count --id=gasperini_01 --libraries=/data/gersbachlab/Ruhi/pipeline_perturbseq_like/library.csv --transcriptome=$cellranger_ref --feature-ref=/data/gersbachlab/Ruhi/pipeline_perturbseq_like/feature_ref.csv 
@@ -273,7 +234,6 @@ process cellrangerGuide {
         
         """
 } 
-
 
 process capture_variables_and_save_list{
     debug true
